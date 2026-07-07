@@ -1,0 +1,202 @@
+---
+title: "DESeq2_yocrc_covariates"
+output: html_document
+date: "DATE" 
+---
+
+```{r setup, include=FALSE}
+rm(list=ls())
+library(DESeq2)
+library(pheatmap)
+library(ggplot2)
+library(cowplot)
+library(EnhancedVolcano)
+library(dplyr)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r allCellTypes_1pct_MSS}
+# Subsets in which to test for DEGs
+subsets = c('Adipocytes', 'B cell', 'CD4 T cells', 'CD8 T cells',
+       'CEACAM1 colonocyte-like', 'Cycing endothelium', 'Cycling Myeloid',
+       'Cycling Stromal', 'Cycling T cells', 'Cycling plasma cell', 'DC',
+       'Enteroendocrine-like', 'Fibroblast', 'Fibroblast-BMP5-SOX6',
+       'Fibroblast-C3', 'Fibroblast-Infl', 'Fibroblast-KCNN3',
+       'Fibroblast-MMP2-THY1', 'Germinal center / Cycling B cell',
+       'Glial cells', 'HSP-hi - B cell', 'HSP-hi Myeloid',
+       'HSP-hi Stromal', 'HSP-hi T cells', 'HSP-hi glial', 'ILCs',
+       'LGR5 stem cell-like', 'Lymphatic endothelium',
+       'MT-Ribo-hi Myeloid', 'MT-Ribo-hi Stromal', 'MT-Ribo-hi T cells',
+       'MT-Ribo-hi endothelium', 'MT-Ribo-hi epithelial',
+       'MUC2 goblet-like', 'Macrophage-Monocyte', 'Mast',
+       'Myofibroblast-SMC', 'NK-Cytotoxic T cells', 'Neuronal cells',
+       'Neutrophil', 'Patient-specific', 'Pericytes', 'Plasma cell',
+       'Regulatory T cells', 'T helper cells', 'Vascular endothelium')
+
+# format subset names 
+subsets = gsub(" ", "_", subsets)
+subsets = gsub("/", "", subsets)
+
+base_path = "/home/EOCRC_atlas/"
+input_dir = 'EOCRC_pseudobulk'
+output_dir = 'pseudobulk_DEG_results_MSSonly_sideTherapySexStageCov_1pctExpressed_contScaleAge_TEST'
+file_str = 'pseudobulk_DATE_'
+save.path = paste0(base_path, "/", input_dir, "/", output_dir, "/")
+read.path = paste0(base_path, "/", input_dir, "/")
+pct_exp.path = paste0(base_path,  '/EOCRC_pctExpressed/')
+ext = "_MSS_sideTherapySexStageCov_1pctExpressed_contScaleAge_EOCRC" 
+
+# create output directory if needed 
+if (!dir.exists(save.path)) {dir.create(save.path, recursive = TRUE)}
+
+# create file to store console messages 
+sink(paste0(save.path, "/output_", ext, ".txt"))
+
+# test DE in each subset 
+for (cluster in subsets){
+  print('---')
+  print('---')
+  print(cluster)
+  
+  # read pseudobulked data 
+  gex = read.csv(paste0(read.path, file_str, cluster, '.csv'), header=FALSE)
+  genes = read.csv(paste0(read.path, file_str, cluster, '_var.csv'))
+  samples = read.csv(paste0(read.path, file_str, cluster, '_obs.csv'))
+  
+  # format gex matrix 
+  rownames(gex) = samples$FRID
+  colnames(gex) = genes$gene_name
+
+  # organize metadata 
+  meta <- data.frame(FRID=samples$FRID, sidedness=samples$Sidedness, condition=samples$Cohort, therapy=samples$Therapy_v2, 
+                     MSI=samples$MSI_v2, sex=samples$Sex, decade=samples$Decade, age = samples$Age, stage = samples$Stage)
+  
+  # format metadata and scale age 
+  rownames(meta)<-meta$FRID
+  meta$age_scaled <- as.numeric(scale(meta$age)) # scale age for use as cont. variable 
+
+  # turn all categorical covariates into factors
+  meta$condition <- factor(meta$condition)
+  meta$sidedness <- factor(meta$sidedness)
+  meta$sex = factor(meta$sex)
+  meta$Overall_Stage = factor(meta$stage)
+  meta$therapy = factor(meta$therapy)
+
+  # Remove samples with unspecified metadata so the covariate isn't skewed
+  meta = meta[meta$MSI=="MSS: STABLE",] 
+  gex = gex[rownames(meta),]
+  
+  meta = meta[meta$stage!="Unknown",] 
+  gex = gex[rownames(meta),]
+  
+  # drop unused levels 
+  meta$sidedness = droplevels(meta$sidedness)
+  meta$therapy = droplevels(meta$therapy)
+  meta$sex = droplevels(meta$sex)
+  meta$stage = droplevels(meta$stage)
+  
+  # remove genes that are zero 
+  keep <- colSums(gex) > 0
+  gex <- gex[, keep]
+
+  # save metadata 
+  write.csv(meta, file=paste0(save.path, "/metadata_", cluster, ".csv"))
+  
+  # subset to testing genes only expressed above a certain threshold within age cohort at single cell level 
+  threshold = 0.01
+  pct_exp = read.csv(paste0(pct_exp.path, 'pctExpressedGenes_Tier2_splitByMSICohort', gsub('_', ' ', cluster), '.csv'))
+  exp_genes_underFifty = pct_exp$Gene[pct_exp$MSS_UnderFifty>=threshold] 
+  exp_genes_FiftyPlus = pct_exp$Gene[pct_exp$MSS_FiftyPlus>=threshold] 
+  exp_genes = union(exp_genes_underFifty, exp_genes_FiftyPlus)
+  exp_genes = intersect(exp_genes, colnames(gex))
+  print(length(exp_genes))
+  gex = gex[,exp_genes]
+  
+  ##############################################################################
+  # DESeq2
+  
+  # skip cell type if not at least 3 samples in each underFifty and fiftyPlus 
+  cond_count = meta %>% dplyr::count(condition)
+  print(paste0("FiftyPlus: ", cond_count$n[1]))
+  print(paste0("UnderFifty: ", cond_count$n[2]))
+  
+  if (sum(cond_count$n[cond_count$condition %in% c('UnderFifty', 'FiftyPlus')] >= 3) != 2) {
+    print(paste0(cluster, ' does not have at least 3 samples in both UnderFifty and FiftyPlus'))
+    next  # Skip the current iteration if inside a loop
+  }
+  
+  # check covariate sparsity 
+  min_per_level = 3
+  candidate_covars <- c("sidedness", "therapy", "sex", "Overall_Stage")
+  valid_covars <- c()
+
+  for (v in candidate_covars) {
+    tbl = table(meta[[v]])
+    if (length(tbl) > 1 && min(tbl) >= min_per_level) {
+      valid_covars <- c(valid_covars, v)
+    }
+  }
+  
+  # make design formula 
+  design_formula <- as.formula(paste("~ +", paste(valid_covars, collapse = " + "), " + age_scaled"))
+
+  print(paste0(cluster, ": running model with design: ", deparse(design_formula)))
+  
+  # check degrees of freedom 
+  mm <- model.matrix(design_formula, data = meta)
+  if (nrow(meta) <= ncol(mm)) {
+    print(paste0(cluster, ": skipped — insufficient degrees of freedom"))
+    next
+  }
+
+  tryCatch({
+    # bulid dds 
+    dds <- DESeqDataSetFromMatrix(countData = t(gex), colData = meta, design = design_formula)
+  
+    # PCA and heatmap 
+    rld <- varianceStabilizingTransformation(dds, blind=TRUE)
+    
+    DESeq2::plotPCA(rld, intgroup = "condition")
+    ggsave(paste0(save.path, "/DESeq2_PCA_cluster_", cluster, "_Cohort_", ext, '.png'), height=4, width=4)
+  
+    rld_mat <- assay(rld)
+    rld_cor <- cor(rld_mat)
+    
+    # Find DE genes 
+    dds <- DESeq(dds)
+    plotDispEsts(dds)
+    
+    # resultsNames(dds)
+    print(resultsNames(dds))
+  
+    res_LFC <- lfcShrink(dds, coef="age_scaled", type="apeglm")
+    
+    # filter to significant 
+    small <- as.data.frame(subset(res_LFC, res_LFC$padj<0.05))
+    small <- small[order(abs(small$log2FoldChange), decreasing = TRUE), ]
+    small$Gene = rownames(small)
+    small = merge(small, pct_exp, by='Gene')
+    
+    # save files 
+    write.csv(res_LFC, paste0(save.path, "/DESeq2_cluster_", cluster, "_AgeScaled_", ext, '.csv'))
+    write.csv(small, paste0(save.path, "/DESeq2_cluster_", cluster, "_AgeScaled_", ext, '_filtered.csv'))
+    
+    #save(dds, res_LFC, small, file = paste0(save.path, "/DESeq2_cluster_", cluster, "_", ext, ".Rdata"))
+    
+    # make volcano plots 
+    top25 = head(small$X[order(small$log2FoldChange, decreasing=TRUE)],20)
+    bottom25 = head(small$X[order(small$log2FoldChange, decreasing=FALSE)],20)
+    EnhancedVolcano(res_LFC,lab = rownames(res_LFC), x = 'log2FoldChange', y = 'padj', pCutoff = 0.05, FCcutoff = 0, 
+                  selectLab = c(top25,bottom25), max.overlaps = 25, pointSize=3, drawConnectors=TRUE, typeConnectors="open") 
+    ggsave(paste0(save.path, "/DESeq2_volcanoPlot_cluster_", cluster, "_AgeScaled_", ext, '.pdf'), height=8, width=8)
+  
+    }, error = function(e) {
+    message(cluster, ": model failed - ", e$message)
+    return(NULL)
+  })
+}
+sink()
+
+```

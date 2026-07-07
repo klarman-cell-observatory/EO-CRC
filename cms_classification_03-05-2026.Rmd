@@ -1,0 +1,49 @@
+---
+title: "cmsClassification"
+output: html_document
+date: "DATE"
+---
+
+```{r setup, include=FALSE}
+rm(list=ls())
+library(Biobase)
+library(CMScaller)
+library("biomaRt")
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r data}
+# table to convert gene symbols to ensembl IDs
+mart <- useMart('ENSEMBL_MART_ENSEMBL')
+mart <- useDataset('hsapiens_gene_ensembl', mart)
+annotLookup <- getBM(mart = mart,attributes = c('hgnc_symbol','ensembl_gene_id','entrezgene_id', 'gene_biotype'),uniqueRows = TRUE)
+
+# load gene expression, gene, and sample ID info 
+gex = read.csv('/home/EOCRC_atlas/EOCRC_pseudobulk/pseudobulk_allCellTypes.csv', header=FALSE)
+genes = read.csv('/home/EOCRC_atlas/EOCRC_pseudobulk/pseudobulk_allCellTypes_var.csv')
+samples = read.csv('/home/EOCRC_atlas/EOCRC_pseudobulk/pseudobulk_allCellTypes_obs.csv')
+
+# Map gene names to ensembl IDs 
+genes_entrez = genes
+for (i in 1:length(genes_entrez$gene_name)){
+  match_index = match(genes_entrez$gene_name[i], annotLookup$hgnc_symbol)
+  if (!is.na(match_index)){genes_entrez$gene_name[i]=annotLookup$entrezgene[match_index]}
+  if (is.na(match_index)){genes_entrez$gene_name[i]=NA}
+}
+
+# convert gene names to entrez ids in expression matrix 
+gex_symbols=gex
+colnames(gex) = genes_entrez$gene_name
+rownames(gex) = samples$FRID
+gex_subset = gex[,!is.na(colnames(gex))]
+
+# transpose and log normalize 
+gex_subset = t(gex_subset)
+gex_subset_log2 = log2(gex_subset+1)
+
+# call CMS with CMScaller - can take gene sybmols and raw counts 
+res = CMScaller(emat=gex_subset, RNAseq = TRUE, FDR=0.05)# res = CMScaller(emat=gex_subset, RNAseq = TRUE, FDR=0.05)
+write.csv(res, '/home/EOCRC_atlas/CMS_Classification/cms_predictions_CMScaller.csv')
+
+```
