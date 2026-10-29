@@ -1,0 +1,789 @@
+options linesize=128 pagesize=78 pageno=1;
+libname indat './DATA';
+libname outloc './';
+%include "/udd/nhkma/datastep/datastep_20260408_v1.sas";
+ods pdf file="/udd/nhkma/stroma_epi_ratio.pdf";
+
+proc means data= alldata; var id; run; 
+proc tabulate data=alldata;
+class female;
+table female;
+title 'number of participants according to gender';
+run;
+
+/*all colorectal cancer cases regardless of tissue availability*/
+data allcrc; set alldata end=_end_;  
+      if TumorID=1767  then ydx=98; 
+      if TumorID=2227  then ydx=98; 
+      if TumorID=3529  then ydx=97; 
+      if TumorID=3538  then ydx=104; 
+      if TumorID=4662  then ydx=114;
+      if (colorect=1 or 1=<PatholDiff<=4) and 70<=ydx<=112;
+
+/**********transformation of variables**********/
+/** Family history of colorectal cancer in a first-degree relative **/
+/* prefh: non-imputation */ 
+      if 1<=prefh2 then prefh=1; 
+else  if prefh2=0  then prefh=0;
+%indic3(vbl=prefh, prefix=prefh, min=0, max=1, reflev=0, usemiss=0);
+
+/* prefh9: imputation with missing indicator */
+      if prefh=0   then prefh9=0;               
+else  if prefh=1   then prefh9=1;               
+else  if prefh=.   then prefh9=2;  
+%indic3(vbl=prefh9, prefix=prefh9, min=0, max=2, reflev=0, usemiss=1);
+
+/* prefhmj: imputation with major category */
+      if prefh=0   then prefhmj=0;               
+else  if prefh=1   then prefhmj=1;               
+else  if prefh=.   then prefhmj=0;
+%indic3(vbl=prefhmj, prefix=prefhmj, min=0, max=1, reflev=0, usemiss=1);
+
+
+/** year of diagnosis **/
+/* ydx3cat: year of diagnosis_3 categories */
+	  if 70<=ydx<=95  then ydx3cat=0;
+else  if 96<=ydx<=100 then ydx3cat=1; 
+else  if 101<=ydx     then ydx3cat=2;
+%indic3(vbl=ydx3cat, prefix=ydx3cat, min=0, max=2, reflev=0, usemiss=0);
+
+
+/* ydxsq: squared term */
+ydxsq=ydx*ydx;
+
+/*year of diagnosis 5 years as a unit*/
+ydx5=ydx/5;
+      if ydx5>0   then ydx5misin=ydx5; else ydx5misin=19.14040;
+      if ydx5=.   then ydx5mis=1;      else ydx5mis=0;
+
+/*year of diagnosis 10 years as a unit*/
+ydx10=ydx/10;
+      if ydx10>0   then ydx10misin=ydx10; else ydx10misin=9.57020;
+      if ydx10=.   then ydx10mis=1;      else ydx10mis=0;
+
+/* agedx3cat */
+	  if 0<=ageyr<55  then agedx3cat=0;
+else  if 55<=ageyr<70 then agedx3cat=1; 
+else  if 70<=ageyr     then agedx3cat=2;
+%indic3(vbl=agedx3cat, prefix=agedx3cat, min=0, max=2, reflev=0, usemiss=0);
+
+/* agedx4cat */
+	  if 0<=ageyr<50  then agedx4cat=0;
+else  if 50<=ageyr<55 then agedx4cat=1;
+else  if 55<=ageyr<70 then agedx4cat=2; 
+else  if 70<=ageyr     then agedx4cat=3;
+%indic3(vbl=agedx4cat, prefix=agedx4cat, min=0, max=3, reflev=0, usemiss=0);
+
+/** age of diagnosis **/
+/* ageyrsq: squared term */
+ageyrsq=ageyr*ageyr;
+
+/* age10 */
+age10=ageyr/10;
+
+/** tumor location **/
+/* site3: sitec into 3 categories */
+/* "sitec" simplified to match with original NHS subsite classification
+1=cecum
+2=ascending
+3=hepatic flexure/transverse
+4=splenic flexure/descending 
+5=sigmoid
+6=rectosigmoid
+7=rectum */
+      if sitec=1   then site3=1; 
+      if sitec=2   then site3=1;
+      if sitec=3   then site3=1;
+      if sitec=4   then site3=2;
+      if sitec=5   then site3=2; 
+      if sitec=6   then site3=3;
+      if sitec=7   then site3=3; 
+%indic3(vbl=site3, prefix=site3, min=2, max=3, reflev=1, usemiss=0);
+
+/* site39: imputation with missing indicator */
+      if site3=1   then site39=1;               
+else  if site3=2   then site39=2;
+else  if site3=3   then site39=3; 
+else  if site3=.   then site39=4;  
+%indic3(vbl=site39, prefix=site39, min=1, max=4, reflev=1, usemiss=1);
+
+/* site3mj: imputation with major category */
+      if site3=1   then site3mj=1;               
+else  if site3=2   then site3mj=2;
+else  if site3=3   then site3mj=3; 
+else  if site3=.   then site3mj=1;  
+%indic3(vbl=site3mj, prefix=site3mj, min=1, max=3, reflev=1, usemiss=1);
+
+/* site4: sitec into 4 categories */
+      if sitec=1   then site4=1; 
+      if sitec=2   then site4=2;
+      if sitec=3   then site4=2;
+      if sitec=4   then site4=3;
+      if sitec=5   then site4=3; 
+      if sitec=6   then site4=4;
+      if sitec=7   then site4=4;
+%indic3(vbl=site4, prefix=site4, min=1, max=4, reflev=1, usemiss=0);
+
+/* site49: sitec into 4 categories imputated by missing indicator */
+      if sitec=1   then site49=1; 
+      if sitec=2   then site49=2;
+      if sitec=3   then site49=2;
+      if sitec=4   then site49=3;
+      if sitec=5   then site49=3; 
+      if sitec=6   then site49=4;
+      if sitec=7   then site49=4;
+      if sitec=.   then site49=5;
+%indic3(vbl=site49, prefix=site49, min=1, max=5, reflev=1, usemiss=1);
+
+/* site4mj: site4 imputated with major category */
+      if site4=1   then site4mj=1; 
+      if site4=2   then site4mj=2;
+      if site4=3   then site4mj=3;
+      if site4=4   then site4mj=4;
+      if site4=.   then site4mj=3; 
+%indic3(vbl=site4mj, prefix=site4mj, min=1, max=4, reflev=1, usemiss=1);
+
+/* site69: sitec into 6 categories imputated by missing indicator */
+      if sitec=1   then site69=1; 
+      if sitec=2   then site69=2;
+      if sitec=3   then site69=3;
+      if sitec=4   then site69=4;
+      if sitec=5   then site69=5; 
+      if sitec=6   then site69=6;
+      if sitec=7   then site69=6;
+      if sitec=.   then site69=7;
+%indic3(vbl=site69, prefix=site69, min=1, max=7, reflev=1, usemiss=1);
+
+
+/** body mass index **/
+/* bmia9: imputation with missing indicator */
+      if bmia=0   then bmia9=0;
+else  if bmia=1   then bmia9=1;
+else  if bmia=2   then bmia9=2;
+else  if bmia=.   then bmia9=3;
+%indic3(vbl=bmia9, prefix=bmia9, min=0, max=3, reflev=0, usemiss=1); 
+
+/* bmiamj: imputation with major category */
+      if bmia=0   then bmiamj=0;
+else  if bmia=1   then bmiamj=1;
+else  if bmia=2   then bmiamj=2;
+else  if bmia=.   then bmiamj=0;
+%indic3(vbl=bmiamj, prefix=bmiamj, min=0, max=2, reflev=0, usemiss=1); 
+
+/** alcohol **/
+	if predxalc=0 then predxalcmj=0;
+else if predxalc=1 then predxalcmj=1;
+else if predxalc=2 then predxalcmj=1;
+%indic3(vbl=predxalcmj, prefix=predxalcmj, min=0, max=1, reflev=0, usemiss=1); 
+
+/** tumor grade (differentiation) **/
+/* tumorg */
+	 if 1<=PatholDiff<=2 then tumorg=1; /*well-mod*/
+else if    PatholDiff =3 then tumorg=2; /*poor*/
+%indic3(vbl=tumorg, prefix=tumorg, min=1, max=2, reflev=1, usemiss=0);
+
+/* tumorg9: imputation with missing indicator */
+      if tumorg=1   then tumorg9=1;               
+else  if tumorg=2   then tumorg9=2;               
+else  if tumorg=.   then tumorg9=3;   
+%indic3(vbl=tumorg9, prefix=tumorg9, min=1, max=3, reflev=1, usemiss=1);
+
+/* tumorgmj: imputation with major category */
+      if tumorg=1   then tumorgmj=1;               
+else  if tumorg=2   then tumorgmj=2;               
+else  if tumorg=.   then tumorgmj=1;  
+%indic3(vbl=tumorgmj, prefix=tumorgmj, min=1, max=2, reflev=1, usemiss=0);
+
+
+/** cancer stage **/
+/* stageall=1-5_5 indicates missing */
+/* stage2: categorization into two groups (I,II vs. III,IV) */
+      if stageall=1   then stage2=0; 
+else  if stageall=2   then stage2=0;
+else  if stageall=3   then stage2=1;
+else  if stageall=4   then stage2=1;
+else  if stageall=5   then stage2=.;
+%indic3(vbl=stage2, prefix=stage2, min=0, max=1, reflev=0, usemiss=0);
+
+/* stage29: categorization into two groups imputated by missing indicator */
+      if stageall=1   then stage29=0; 
+else  if stageall=2   then stage29=0;
+else  if stageall=3   then stage29=1;
+else  if stageall=4   then stage29=1;
+else  if stageall=5   then stage29=2;
+%indic3(vbl=stage29, prefix=stage29, min=0, max=2, reflev=0, usemiss=1);
+
+/* stage2mj: categorization into two groups imputated by major category */
+      if stageall=1   then stage2mj=0; 
+else  if stageall=2   then stage2mj=0;
+else  if stageall=3   then stage2mj=1;
+else  if stageall=4   then stage2mj=1;
+else  if stageall=5   then stage2mj=1;
+%indic3(vbl=stage2mj, prefix=stage2mj, min=0, max=1, reflev=0, usemiss=1);
+
+/* stage1to4: categorization into four groups (I, II, III, IV)*/
+      if stageall=1   then stage1to4=1; 
+else  if stageall=2   then stage1to4=2;
+else  if stageall=3   then stage1to4=3;
+else  if stageall=4   then stage1to4=4;
+else  if stageall=5   then stage1to4=.;
+%indic3(vbl=stage1to4, prefix=stage1to4, min=1, max=4, reflev=1, usemiss=0);
+
+/* stage1to4mj: categorization into four groups imputated by major category */
+      if stageall=1   then stage1to4mj=1; 
+else  if stageall=2   then stage1to4mj=2;
+else  if stageall=3   then stage1to4mj=3;
+else  if stageall=4   then stage1to4mj=4;
+else  if stageall=5   then stage1to4mj=2;
+%indic3(vbl=stage1to4mj, prefix=stage1to4mj, min=1, max=4, reflev=1, usemiss=1);
+
+
+/** microsatellite instability **/
+/* msin9: imputation with missing indicator */
+      if msin=0   then msin9=0;
+else  if msin=1   then msin9=1;
+else  if msin=.   then msin9=2;    
+%indic3(vbl=msin9, prefix=msin9, min=0, max=2, reflev=0, usemiss=1);
+
+/* msinmj: imputation with major category */
+      if msin=0   then msinmj=0;
+else  if msin=1   then msinmj=1;
+else  if msin=.   then msinmj=0;
+%indic3(vbl=msinmj, prefix=msinmj, min=0, max=1, reflev=0, usemiss=1);
+
+
+/** cimp **/
+/* cimphigh9: imputation with missing indicator */
+      if cimphigh=0   then cimphigh9=0;               
+else  if cimphigh=1   then cimphigh9=1;               
+else  if cimphigh=.   then cimphigh9=2; 
+%indic3(vbl=cimphigh9, prefix=cimphigh9, min=0, max=2, reflev=0, usemiss=1);
+
+/* cimphighmj: imputation with major category */
+      if cimphigh=0   then cimphighmj=0;               
+else  if cimphigh=1   then cimphighmj=1;               
+else  if cimphigh=.   then cimphighmj=0;
+%indic3(vbl=cimphighmj, prefix=cimphighmj, min=0, max=1, reflev=0, usemiss=1);
+
+/* cimp9: categorization with 9 gourps */
+	 if cimp8scorea=0 then cimp9=0;
+else if cimp8scorea=1 then cimp9=1;
+else if cimp8scorea=2 then cimp9=2;
+else if cimp8scorea=3 then cimp9=3;
+else if cimp8scorea=4 then cimp9=4;
+else if cimp8scorea=5 then cimp9=5;
+else if cimp8scorea=6 then cimp9=6;
+else if cimp8scorea=7 then cimp9=7;
+else if cimp8scorea=8 then cimp9=8;
+%indic3(vbl=cimp9, prefix=cimp9, min=0, max=8, reflev=0, usemiss=0);
+
+/* cimpa2: criteria for New CIMP */
+     if 5<= cimp8scorea      then cimpa2=2; /*cimpa-high*/
+else if 0< cimp8scorea < 5  then cimpa2=1; /*cimpa-low */
+else if 0= cimp8score        then cimpa2=0; /*cimpa-0   */
+
+/* cimpa2mj; New CIMP imputated by major category */
+      if cimpa2=0   then cimpa2mj=0;               
+else  if cimpa2=1   then cimpa2mj=1;               
+else  if cimpa2=.   then cimpa2mj=0; 
+
+/* cimpa29; New CIMP imputated by missing indicator */
+      if cimpa2=0   then cimpa29=0;               
+else  if cimpa2=1   then cimpa29=1;               
+else  if cimpa2=.   then cimpa29=9; 
+
+
+/** kras **/
+/* krasmut49: imputation with missing indicator */
+      if krasmut4=0   then krasmut49=0;               
+else  if krasmut4=1   then krasmut49=1;               
+else  if krasmut4=.   then krasmut49=2; 
+%indic3(vbl=krasmut49, prefix=krasmut49, min=0, max=2, reflev=0, usemiss=1);
+
+/* krasmut4mj: imputation with major category */
+      if krasmut4=0   then krasmut4mj=0;               
+else  if krasmut4=1   then krasmut4mj=1;               
+else  if krasmut4=.   then krasmut4mj=0; 
+%indic3(vbl=krasmut4mj, prefix=krasmut4mj, min=0, max=1, reflev=0, usemiss=1);
+
+
+/** braf **/
+/* brafmt9: imputation with missing indicator */
+      if brafmt=0   then brafmt9=0;               
+else  if brafmt=1   then brafmt9=1;               
+else  if brafmt=.   then brafmt9=2; 
+%indic3(vbl=brafmt9, prefix=brafmt9, min=0, max=2, reflev=0, usemiss=1);
+
+/* brafmtmj: imputation with major category */
+      if brafmt=0   then brafmtmj=0;               
+else  if brafmt=1   then brafmtmj=1;               
+else  if brafmt=.   then brafmtmj=0;
+%indic3(vbl=brafmtmj, prefix=brafmtmj, min=0, max=1, reflev=0, usemiss=1);
+
+
+/** pik3ca **/
+/* pik3ca9: imputation with missing indicator */
+      if pik3ca=0   then pik3ca9=0;               
+else  if pik3ca=1   then pik3ca9=1;               
+else  if pik3ca=.   then pik3ca9=2; 
+%indic3(vbl=pik3ca9, prefix=pik3ca9, min=0, max=2, reflev=0, usemiss=1);
+
+/* pik3camj: imputation with major category */
+      if pik3ca=0   then pik3camj=0;               
+else  if pik3ca=1   then pik3camj=1;               
+else  if pik3ca=.   then pik3camj=0;
+%indic3(vbl=pik3camj, prefix=pik3camj, min=0, max=1, reflev=0, usemiss=1);
+
+
+/** LINE-1 (continuous) missing indicator **/
+      if lineavgr>0   then line1misin=lineavgr; else line1misin=63.0;
+      if lineavgr=.   then line1mis=1;          else line1mis=0;
+/* LINE-1_30% decrease as a unit */
+line30=line1misin*(-1/30);
+
+/* line1mis missing indicator */
+      if line1mis=0   then line1mis9=0;               
+else  if line1mis=1   then line1mis9=1;               
+else  if line1mis=2   then line1mis9=2; 
+
+/** line1mis missing major category **/
+      if line1mis=0   then line1mismj=0;               
+else  if line1mis=1   then line1mismj=1;                
+else  if line1mis=.   then line1mismj=9; 
+
+/* line1_3cat */
+      if 0<=lineavgr<55   then line1_3cat=0; 
+else   if 55<=lineavgr<65   then line1_3cat=1;
+else  if 65< lineavgr 	then line1_3cat=2;
+
+/*** lymphocytic reaction ***/
+/** TIL **/
+/*TIL 3 categories*/
+      if til=0   then tilcate3=0; 
+else  if til=1   then tilcate3=1;
+else  if til=2   then tilcate3=2;
+else  if til=3   then tilcate3=2; 
+%indic3(vbl=tilcate3, prefix=tilcate3, min=0, max=2, reflev=0, usemiss=0);
+
+/*TIL 3 categories_missing indicator*/
+      if til=0   then tilcate39=0; 
+else  if til=1   then tilcate39=1;
+else  if til=2   then tilcate39=2;
+else  if til=3   then tilcate39=2;
+else  if til=.   then tilcate39=3;
+%indic3(vbl=tilcate39, prefix=tilcate39, min=0, max=3, reflev=0, usemiss=1);
+
+
+/** Intratumoral periglandular reaction **/
+/*PEN 3 categories*/
+      if pen=0   then pencate3=0; 
+else  if pen=1   then pencate3=1;
+else  if pen=2   then pencate3=2;
+else  if pen=3   then pencate3=2;
+%indic3(vbl=pencate3, prefix=pencate3, min=0, max=2, reflev=0, usemiss=0);
+
+/*PEN 3 categories_missing indicator*/
+      if pen=0   then pencate39=0; 
+else  if pen=1   then pencate39=1;
+else  if pen=2   then pencate39=2;
+else  if pen=3   then pencate39=2;
+else  if pen=.   then pencate39=3;
+%indic3(vbl=pencate39, prefix=pencate39, min=0, max=3, reflev=0, usemiss=1);
+
+
+/** Peritumoral reaction **/
+/* PET 3 categories */
+      if pet=0   then petcate3=0; 
+else  if pet=1   then petcate3=1;
+else  if pet=2   then petcate3=2;
+else  if pet=3   then petcate3=2;
+%indic3(vbl=petcate3, prefix=petcate3, min=0, max=2, reflev=0, usemiss=0);
+
+/* PET 3 categories missing indicator */
+      if pet=0   then petcate39=0; 
+else  if pet=1   then petcate39=1;
+else  if pet=2   then petcate39=2;
+else  if pet=3   then petcate39=2;
+else  if pet=.   then petcate39=3;
+%indic3(vbl=petcate39, prefix=petcate39, min=0, max=3, reflev=0, usemiss=1);
+
+
+/** Crohn's-like reaction **/
+/* CRO 3 categories */
+      if cro=0   then crocate3=0; 
+else  if cro=1   then crocate3=1;
+else  if cro=2   then crocate3=2;
+else  if cro=3   then crocate3=2;
+%indic3(vbl=crocate3, prefix=crocate3, min=0, max=2, reflev=0, usemiss=0);
+
+/* CRO 3 categories missing indicator */
+      if cro=0   then crocate39=0; 
+else  if cro=1   then crocate39=1;
+else  if cro=2   then crocate39=2;
+else  if cro=3   then crocate39=2;
+else  if cro=.   then crocate39=3;
+%indic3(vbl=crocate39, prefix=crocate39, min=0, max=3, reflev=0, usemiss=1);
+
+
+/* Stroma_epithelium_ratio */
+		   if 0<=str_epi_c_ratio<=9.157894737           then st_ep_4cat=0;
+else  if 9.157894737<str_epi_c_ratio<=19.11491935 then st_ep_4cat=1;
+else  if 19.11491935<str_epi_c_ratio<=46.66507177 then st_ep_4cat=2;
+else  if 46.66507177<str_epi_c_ratio then st_ep_4cat=3;
+%indic3(vbl=st_ep_4cat, prefix=st_ep_4cat, min=0, max=3, reflev=0, usemiss=0);
+
+/*** Prognosis ***/
+/** crcsurv10 **/
+if 10<crcsurv then do; crcsurv10=10; crccens10=0; end; 
+else do; crcsurv10=crcsurv; crccens10=crccens; end;
+
+/** osurv10 **/
+if 10<osurv then do; osurv10=10; oscens10=0; end; 
+else do; osurv10=osurv; oscens10=oscens; end;
+
+/**********inverse probability weighting for CAF data availability**********/
+/* tissue available yes or no */
+if FAPp_prop ^=. and crcsurv >=0 then tyes=1; else tyes=0; run;
+
+/*variable selection*/
+proc logistic data=allcrc descending; 
+class prefh9 (param=ref ref='0') bmia9 (param=ref ref='0') site69 (param=ref ref='1') stageall (param=ref ref='1'); 
+model tyes = female ageyr ageyrsq ydx ydxsq prefh9 bmia9 site69 stageall/selection=backward sls=.20;
+title 'prob for tyes select covariate'; 
+run; 
+
+/*probability calculation*/
+proc logistic data=allcrc descending noprint; 
+     class site69 (param=ref ref='1') stageall (param=ref ref='1'); 
+     model tyes = female ydx ydxsq site69 stageall; 
+     title 'prob for tyes'; 
+     output out=ps pred=ps; /*ps: probability for censoring*/ 
+     run;
+
+data ps2; set ps; if tyes=1 then probwt=1/ps; 
+
+proc univariate data=ps2; var probwt; 
+title "probwt from ps";
+run;
+
+data dataps; set ps2;
+if tyes=1 then probwt=1/ps; 
+if probwt>11.80601 then probwt=11.80601;  
+run; 
+/* truncation at 95th percentile */ /* 100% Max 103.88101 */
+
+ods graphics on;
+
+proc logistic plots(only)=roc;
+model tyes(event='1') = ps;
+run;
+ods graphics off; /* Area Under the Curve = 0.7771 */
+
+/************************************ data for analyses ***************************************************/
+/***  data for analyses ***/
+data alldata2; set dataps; if 1<=PatholDiff<=4 and FAPp_prop=>0 and 70<=ydx<=110 and osurv =>0 and crcsurv =>0 ; run; 
+proc sort data=alldata2 nodupkey out=alldata2 dupout=work.dupsample; by TumorID; run;
+data line; set alldata2; if stage29=>0 and site3mj=>0 and str_epi_c_ratio=>0; run;
+
+/* data set definition */
+data msih; set line; if msin=1; run;
+data nonmsih; set line; if msin=0; run;
+
+data crohn; set line; if crocate3=>0; run;
+data cd274; set line; if CD274score=>0; run;
+
+/***Descriptive statistics for the text***/
+/**Methods section**/
+/*Study population*/
+/*case number of the total cohort*/
+proc means data=line n; var TumorID; title "case number of the total cohort"; run; 
+/*these are variables with missing indicator category*/ 
+proc freq data=line; tables prefh9 site49 tumorg9 stageall msin9 cimphigh9 krasmut49 brafmt9 pik3ca9 line1mis; 
+	title "no of missing data_the largest indicates missing";run;
+
+/*Result section*/
+/*followup time*/
+data followup; set line; if oscens=0;
+proc univariate data=followup; var osurv; title "followup time";run;
+/*no of CRC-specific and overall deaths*/
+proc freq data=line; tables crccens oscens;
+title "no of CRC-specific and overall deaths";run;
+
+proc means data=line median q1 q3;
+    var str_epi_c_ratio;
+run;
+
+proc means data=line median q1 q3;
+    class agedx4cat;
+    var str_epi_c_ratio;
+run;
+
+proc means data=nonmsih median q1 q3;
+    var str_epi_c_ratio;
+run;
+
+proc means data=nonmsih median q1 q3;
+    class agedx4cat;
+    var str_epi_c_ratio;
+run;
+
+proc freq data=line;
+	 tables agedx4cat*(female prefh site3 tumorg stage2 stage1to4 tumorg msin cimphigh krasmut4 brafmt pik3ca tilcate3 pencate3 petcate3 crocate3 
+			  )/norow;
+	 title 'Age at diagnosis 4 categories';
+     run;
+
+/* Spearman's rank correlation test */
+proc corr data=line outp=wk1 outs=wk2 spearman;
+var ageyr agedx4cat str_epi_a_ratio female prefh site3 tumorg msin krasmut4 brafmtmj pik3camj stage2 stage1to4 cimphigh cimp8scorea;
+	title 'Age at diagnosis vs stroma_epi_ratio';
+run;
+
+/* MSI-high */
+proc corr data=msih outp=wk1 outs=wk2 spearman;
+var ageyr str_epi_a_ratio	caf_epi_a_ratio	acta2_epi_a_ratio	fap_epi_a_ratio	dp_epi_a_ratio	str_epi_c_ratio	caf_epi_c_ratio	acta2_epi_c_ratio	fap_epi_c_ratio	dp_epi_c_ratio 
+;
+	title 'Age at diagnosis vs stroma_epi_ratio in MSI-high case';
+run;
+
+/* Non-MSI-high */
+proc corr data=nonmsih outp=wk1 outs=wk2 spearman;
+var ageyr str_epi_a_ratio	caf_epi_a_ratio	acta2_epi_a_ratio	fap_epi_a_ratio	dp_epi_a_ratio	str_epi_c_ratio	caf_epi_c_ratio	acta2_epi_c_ratio	fap_epi_c_ratio	dp_epi_c_ratio 
+;
+	title 'Age at diagnosis vs stroma_epi_ratio in Non-MSI-high case';
+run;
+
+/*Logistic regression model*/
+/*without IPW*/                        
+%macro logistic (data, outcome, pred);
+proc logistic data=&data descending ;
+ class &pred (param=ref ref='0') ;
+ model &outcome = &pred; 
+ title "outcome=&outcome pred=&pred  ordinal regression";run;
+
+proc logistic data=&data descending;
+ model &outcome = &pred; 
+ title "outcome=&outcome pred=&pred p trend";run;
+
+proc logistic data=&data descending ;
+ class &pred (param=ref ref='0')  site3mj (param=ref ref='1') ;
+ model &outcome = &pred 
+                  age10 female ydx5 prefhmj site3mj msinmj cimphighmj krasmut4mj brafmtmj pik3camj line30 line1mis tumorgmj 
+	              /rl selection =backward sls =0.05  include = 1; 
+ title "outcome=&outcome pred=&pred multivariable  selected variables";run;
+%mend;
+
+/*IPW*/
+%macro ipw_logistic (data, outcome, pred, covs);
+ods excel options(sheet_name="&outcome vs &pred 1");
+proc logistic data=&data descending;
+ class &pred (param=ref ref='0') ;
+ model &outcome = &pred; 
+ weight probwt;
+ title "IPW uni outcome=&outcome pred=&pred uni";run;
+
+ ods excel options(sheet_name="&outcome vs &pred 2");
+proc logistic data=&data descending;
+ class site3mj (param=ref ref='1') ; 
+ model &outcome = &pred; 
+ weight probwt;
+ title "IPW uni outcome=&outcome pred=&pred  p trend uni";run; 
+
+ ods excel options(sheet_name="&outcome vs &pred 3");
+ proc logistic data=&data descending;
+ class &pred (param=ref ref='0')  site3mj (param=ref ref='1') ;
+ model &outcome = &pred 
+                  age10 female ydx5 prefhmj site3mj msinmj cimphighmj krasmut4mj brafmtmj pik3camj line30 line1mis tumorgmj 
+	              /rl selection =backward sls =0.05  include = 1; 
+weight probwt;
+title "IPW outcome=&outcome pred=&pred multivariable backward elimination alpha=0.05";run;
+ 
+ods excel options(sheet_name="&outcome vs &pred 4");
+ proc logistic data=&data descending;
+ class &pred (param=ref ref='0') site3mj (param=ref ref='1') ; 
+ model &outcome = &pred &covs /clodds;
+ weight probwt;
+ title "IPW outcome=&outcome pred=&pred multivariable odds final model"; run;
+
+ ods excel options(sheet_name="&outcome vs &pred 5");
+proc logistic data=&data descending;
+ class site3mj (param=ref ref='1') ; 
+ model &outcome = &pred &covs /clodds; 
+ weight probwt;
+ title "IPW outcome=&outcome pred=&pred multivariable p trend final model"; run; 
+%mend;
+
+/* All cases */
+proc logistic data=line descending ;
+ class agedx4cat (param=ref ref='3') ;
+ model st_ep_4cat = agedx4cat; 
+ title "outcome=st_ep_4cat pred=agedx4cat odds ratio uni";
+run;
+
+proc logistic data=line descending;
+ model st_ep_4cat = ageyr; 
+ title "outcome=st_ep_4cat pred=ageyr p trend uni";
+run;
+/*
+proc logistic data=line descending;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1'); 
+ model st_ep_4cat = ageyr female prefhmj site3mj msinmj cimphighmj krasmut4mj brafmtmj pik3camj line30 line1mis tumorgmj stageall
+	              /rl selection =backward sls =0.05  include = 1;
+ title "outcome=st_ep_4cat pred=ageyr p trend multi for selection with stage";
+run;
+
+proc logistic data=line descending;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1') stageall (param=ref ref='1'); 
+ model st_ep_4cat = agedx4cat female site3mj tumorgmj ;
+ title "outcome=st_ep_4cat pred=agedx4cat odds ratio multi final model";
+run;
+
+proc logistic data=line descending;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1') stageall (param=ref ref='1'); 
+ model st_ep_4cat = ageyr female site3mj tumorgmj;
+ title "outcome=st_ep_4cat pred=ageyr p trend multi final model";
+run;
+*/
+proc logistic data=line descending;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1') stage29 (param=ref ref='0'); 
+ model st_ep_4cat = agedx4cat female site3mj stage29;
+ title "outcome=st_ep_4cat pred=agedx4cat odds ratio multi final model";
+run;
+
+proc logistic data=line descending;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1') stage29 (param=ref ref='0'); 
+ model st_ep_4cat = ageyr female site3mj stage29;
+ title "outcome=st_ep_4cat pred=ageyr p trend multi final model";
+run;
+
+proc surveylogistic data=line;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1'); 
+ model st_ep_4cat (descending) = agedx4cat; 
+ weight probwt;
+ title "IPW outcome=st_ep_4cat pred=agedx4cat odds ratio uni"; 
+run;
+
+proc surveylogistic data=line;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1'); 
+ model st_ep_4cat (descending) = ageyr; 
+ weight probwt;
+ title "IPW outcome=st_ep_4cat pred=ageyr p trend uni"; 
+run;
+/*
+proc surveylogistic data=line;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1'); 
+ model st_ep_4cat (descending) = agedx4cat female site3mj tumorgmj;
+ weight probwt;
+ title "IPW outcome=st_ep_4cat pred=agedx4cat odds ratio multi final model"; 
+run;
+
+proc surveylogistic data=line;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1'); 
+ model st_ep_4cat (descending) = ageyr female site3mj tumorgmj;
+ weight probwt;
+ title "IPW outcome=st_ep_4cat pred=ageyr p trend multi final model"; 
+run;
+*/
+proc surveylogistic data=line;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1') stage29 (param=ref ref='0'); 
+ model st_ep_4cat (descending) = agedx4cat female site3mj stage29;
+ weight probwt;
+ title "IPW outcome=st_ep_4cat pred=agedx4cat odds ratio multi final model with stage"; 
+run;
+
+proc surveylogistic data=line;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1') stage29 (param=ref ref='0'); 
+ model st_ep_4cat (descending) = ageyr female site3mj stage29;
+ weight probwt;
+ title "IPW outcome=st_ep_4cat pred=ageyr p trend multi final model with stage"; 
+run;
+
+/* Non-MSI-high */
+proc logistic data=nonmsih descending ;
+ class agedx4cat (param=ref ref='3') ;
+ model st_ep_4cat = agedx4cat; 
+ title "MSS outcome=st_ep_4cat pred=agedx4cat odds ratio uni";
+run;
+
+proc logistic data=nonmsih descending;
+ model st_ep_4cat = ageyr; 
+ title "MSS outcome=st_ep_4cat pred=ageyr p trend uni";
+run;
+/*
+proc logistic data=nonmsih descending;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1'); 
+ model st_ep_4cat = ageyr female prefhmj site3mj msinmj cimphighmj krasmut4mj brafmtmj pik3camj line30 line1mis tumorgmj stageall
+	              /rl selection =backward sls =0.05  include = 1;
+ title "MSS outcome=st_ep_4cat pred=ageyr p trend multi for selection with stage";
+run;
+
+proc logistic data=nonmsih descending;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1'); 
+ model st_ep_4cat = agedx4cat female site3mj tumorgmj;
+ title "MSS outcome=st_ep_4cat pred=agedx4cat odds ratio multi final model";
+run;
+
+proc logistic data=nonmsih descending;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1'); 
+ model st_ep_4cat = ageyr female site3mj tumorgmj;
+ title "MSS outcome=st_ep_4cat pred=ageyr p trend multi final model";
+run;
+*/
+
+proc logistic data=nonmsih descending;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1') stage29 (param=ref ref='0'); 
+ model st_ep_4cat = agedx4cat female site3mj stage29;
+ title "MSS outcome=st_ep_4cat pred=agedx4cat odds ratio multi final model with stage";
+run;
+
+proc logistic data=nonmsih descending;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1') stage29 (param=ref ref='0'); 
+ model st_ep_4cat = ageyr female site3mj stage29;
+ title "MSS outcome=st_ep_4cat pred=ageyr p trend multi final model with stage";
+
+proc surveylogistic data=nonmsih;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1'); 
+ model st_ep_4cat (descending) = agedx4cat; 
+ weight probwt;
+ title "MSS IPW outcome=st_ep_4cat pred=agedx4cat odds ratio uni"; 
+run;
+
+proc surveylogistic data=nonmsih;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1'); 
+ model st_ep_4cat (descending) = ageyr; 
+ weight probwt;
+ title "MSS IPW outcome=st_ep_4cat pred=ageyr p trend uni"; 
+run;
+/*
+proc surveylogistic data=nonmsih;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1'); 
+ model st_ep_4cat (descending) = agedx4cat female site3mj tumorgmj;
+ weight probwt;
+ title "MSS IPW outcome=st_ep_4cat pred=agedx4cat odds ratio multi final model"; 
+run;
+
+proc surveylogistic data=nonmsih;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1'); 
+ model st_ep_4cat (descending) = ageyr female site3mj tumorgmj;
+ weight probwt;
+ title "MSS IPW outcome=st_ep_4cat pred=ageyr p trend multi final model"; 
+run;
+*/
+proc surveylogistic data=nonmsih;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1') stage29 (param=ref ref='0'); 
+ model st_ep_4cat (descending) = agedx4cat female site3mj stage29;
+ weight probwt;
+ title "MSS IPW outcome=st_ep_4cat pred=agedx4cat odds ratio multi final model with stage"; 
+run;
+
+proc surveylogistic data=nonmsih;
+ class agedx4cat (param=ref ref='3') site3mj (param=ref ref='1') stage29 (param=ref ref='0'); 
+ model st_ep_4cat (descending) = ageyr female site3mj stage29;
+ weight probwt;
+ title "MSS IPW outcome=st_ep_4cat pred=ageyr p trend multi final model with stage"; 
+run;
+
+ods pdf close;
+
+endsas;
+
